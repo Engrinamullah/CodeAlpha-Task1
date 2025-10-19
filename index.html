@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Gallery Template</title>
+    <!-- FAVICON: This line adds the icon to the browser tab/tag -->
+    <link rel="icon" type="image/jpeg" href="images/Gallery icon.jpeg"> 
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar styling for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827; /* Dark track for theme */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; /* Gray thumb */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        /* Hide the modals initially, ensuring full screen coverage */
+        #lightbox-modal, #add-image-modal {
+            display: none;
+            z-index: 1000;
+        }
+
+        /* Utility class for smooth visibility transition */
+        .fade-in {
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .fade-in.active {
+            opacity: 1;
+        }
+        
+        /* Ensures the sidebar transition is smooth */
+        #mobile-menu {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Keyframes for the image fade-in effect */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Class applied to gallery items for animation */
+        .gallery-item-fade {
+            animation: fadeIn 0.5s ease-out forwards;
+            opacity: 0; /* Start hidden */
+        }
+/* --- BACKGROUND STYLING: Set the custom image as the body background --- */
+body {
+    /* Corrected: Using the exact filename and extension provided by the user ('background image.jpeg') */
+    background-image: url('images/background\ image.jpg'); 
+    /* Ensure the image covers the entire viewport */
+    background-size: cover; 
+    /* Keep the image fixed when scrolling */
+    background-attachment: fixed; 
+    /* Center the image */
+    background-position: center; 
+    overflow-x: hidden;
+    /* Add a subtle dark overlay for text readability, applied via the body's before pseudo-element */
+    position: relative;
+}
+
+        body::before {
+            content: '';
+            position: fixed; /* Fixed position to cover the whole viewport, even on scroll */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6); /* 60% black overlay */
+            z-index: -1; /* Place it behind all content */
+        }
+        /* --- END STYLING --- */
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'whatsapp-green': '#25D366', 
+                        'whatsapp-dark': '#128C7E',  
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-sans text-white min-h-screen">
+
+    <!-- Array of Image Data (Updated descriptions and categories) -->
+    <script>
+        const images = [
+            // City (Note: Some image names in this section suggest Nature, but the category is kept as requested)
+            { src: 'images/Abstract Lines.jpeg', category: 'City', description: 'A composition focusing on abstract lines, possibly architectural.' },
+            { src: 'images/Close-up Deer.jpeg', category: 'City', description: 'A detailed close-up of a deer in a natural setting.' },
+            
+            // Portrait (Note: Some image names in this section suggest Nature, but the category is kept as requested)
+            { src: 'images/Sunset by Lake.jpeg', category: 'Portrait', description: 'A subject portrait shot with a sunset over a lake background.' },
+            { src: 'images/Flying Eagle.jpeg', category: 'Portrait', description: 'A majestic eagle captured mid-flight.' },
+            { src: 'images/Forest Path.jpeg', category: 'Portrait', description: 'A portrait set along a quiet path in a dense forest.' },
+            { src: 'images/nature1.jpeg', category: 'Portrait', description: 'A portrait with a beautiful natural landscape as the backdrop.' },
+            { src: 'images/Small Bird.webp', category: 'Portrait', description: 'A portrait of a small bird perched on a branch.' },
+            
+            // Nature
+            { src: 'images/Snowy Peaks.webp', category: 'Nature', description: 'A panoramic view of pristine, snowy mountain peaks.' },
+            { src: 'images/Sunset by Lake.jpeg', category: 'Nature', description: 'The golden light of sunset reflecting over a calm lake.' },
+            { src: 'images/Water Ripples.jpeg', category: 'Nature', description: 'Detailed abstract patterns of ripples on the water surface.' },
+            { src: 'images/Rondam Wallpaper.jpeg', category: 'Nature', description: 'A high-resolution nature scene suitable for a desktop wallpaper.' },
+            { src: 'images/rondam image.jpeg', category: 'Nature', description: 'A scenic image of a location.' }
+        ];
+
+        let currentLightboxIndex = 0;
+        let activeCategory = 'ALL'; 
+        let filteredImages = images; // Initialize with all images
+        let searchQuery = ''; // State for search query
+        let blurTimeout; // Used to delay blur event to allow clicking suggestions
+
+        const popularSuggestions = ['Nature', 'City', 'Portrait', 'Landscape', 'Fashion'];
+
+
+        /**
+         * Toggles the mobile menu open and closed.
+         */
+        function toggleMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const isOpen = menu.classList.contains('translate-x-0');
+            
+            if (isOpen) {
+                // Close menu
+                menu.classList.remove('translate-x-0');
+                menu.classList.add('translate-x-full');
+            } else {
+                // Open menu
+                menu.classList.remove('translate-x-full');
+                menu.classList.add('translate-x-0');
+            }
+        }
+        
+        /**
+         * Gets the unique list of categories from the image data.
+         */
+        function getCategories() {
+            return ['ALL', ...new Set(images.map(img => img.category))].filter(c => c !== undefined && c !== null);
+        }
+
+        /**
+         * Generates the category filter buttons for both desktop and mobile navigation.
+         */
+        function renderNavCategories() {
+            const categories = getCategories();
+            const desktopNav = document.getElementById('desktop-nav');
+            const mobileNav = document.getElementById('mobile-nav');
+
+            desktopNav.innerHTML = '';
+            mobileNav.innerHTML = '';
+
+            categories.forEach(category => {
+                const isActive = category === activeCategory;
+                
+                // Desktop link/button - Sleek, professional pill button style
+                const desktopClass = isActive 
+                    ? 'bg-green-600 text-white shadow-md' 
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white';
+
+                desktopNav.innerHTML += `
+                    <button onclick="filterImages('${category}')" class="${desktopClass} transition-all duration-200 uppercase text-xs font-semibold px-3 py-1.5 rounded-full focus:outline-none">
+                        ${category}
+                    </button>
+                `;
+
+                // Mobile link/button - Full-width button style
+                const mobileClass = isActive 
+                    ? 'bg-green-600 text-white shadow-lg' 
+                    : 'text-white/80 hover:bg-gray-700 hover:text-white';
+                    
+                mobileNav.innerHTML += `
+                    <button onclick="filterImages('${category}'); toggleMenu();" class="${mobileClass} transition-colors duration-200 py-3 rounded-lg text-left uppercase text-lg font-medium w-full px-4 focus:outline-none">
+                        ${category}
+                    </button>
+                `;
+            });
+        }
+        
+        /**
+         * Handles changes in the search input field and triggers a re-filter.
+         */
+        function handleSearchInput(inputEl) {
+            // Update the search query state
+            searchQuery = inputEl.value.toLowerCase().trim();
+            // Trigger a re-filter, maintaining the current category selection
+            filterImages(activeCategory);
+            
+            // Keep expanded if there is text
+            if (searchQuery) {
+                 inputEl.classList.remove('w-10', 'bg-transparent', 'border-transparent');
+                 inputEl.classList.add('w-48', 'sm:w-64', 'bg-gray-800', 'border-gray-700', 'rounded-lg');
+            }
+        }
+
+        /**
+         * Filters the images based on the selected category AND the search query, then updates the gallery.
+         * @param {string} category - The category to filter by ('ALL' to show everything).
+         */
+        function filterImages(category) {
+            activeCategory = category;
+            
+            // 1. Filter by category
+            let tempFiltered = (category === 'ALL') 
+                ? images 
+                : images.filter(img => img.category === category);
+
+            // 2. Filter by search query (only if a query exists)
+            if (searchQuery) {
+                tempFiltered = tempFiltered.filter(img => 
+                    // Search in description OR category
+                    img.description.toLowerCase().includes(searchQuery) ||
+                    img.category.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            filteredImages = tempFiltered;
+            
+            // Rerender the navigation buttons (to update active state)
+            renderNavCategories(); 
+            // Rerender the gallery
+            renderGallery();
+        }
+
+        /**
+         * Renders the image gallery using the filteredImages array.
+         */
+        function renderGallery() {
+            const gallery = document.getElementById('image-gallery');
+            gallery.innerHTML = ''; // Clear existing images
+            
+            const imagesToRender = filteredImages;
+
+            if (imagesToRender.length === 0) {
+                 gallery.innerHTML = '<p class="col-span-full text-center text-lg text-white/50 py-12">No images found matching your current filter and search criteria.</p>';
+                 return;
+            }
+
+            imagesToRender.forEach((img, index) => {
+                const card = document.createElement('div');
+                // Added gallery-item-fade class for animation
+                card.className = 'group relative overflow-hidden rounded-xl transition duration-300 ease-in-out cursor-pointer aspect-[4/3] gallery-item-fade'; 
+                
+                // Set the staggered delay for animation
+                card.style.animationDelay = `${index * 0.05}s`;
+
+                // CRITICAL: openLightbox must use the filtered index!
+                card.setAttribute('onclick', `openLightbox(${index})`);
+
+                card.innerHTML = `
+                    <!-- The image takes up all space and uses object-cover to fill the frame -->
+                    <img src="${img.src}" alt="${img.description}" class="w-full h-full object-cover transition duration-300 group-hover:scale-[1.05] group-hover:opacity-75" onerror="this.onerror=null; this.src='https://placehold.co/1000x750/333/fff?text=Error+Loading+Image'">
+                    <!-- Description overlay at the bottom -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                        <p class="text-white text-xs sm:text-sm font-light">${img.description}</p>
+                    </div>
+                `;
+                gallery.appendChild(card);
+            });
+        }
+
+        /**
+         * Opens the lightbox modal for a specific image index.
+         * @param {number} index - The index of the image in the CURRENTLY FILTERED ARRAY.
+         */
+        function openLightbox(index) {
+            currentLightboxIndex = index;
+            const lightboxModal = document.getElementById('lightbox-modal');
+            
+            updateLightboxContent();
+
+            lightboxModal.style.display = 'flex';
+            setTimeout(() => lightboxModal.classList.add('active'), 10);
+        }
+
+        /**
+         * Closes the lightbox modal.
+         */
+        function closeLightbox() {
+            const lightboxModal = document.getElementById('lightbox-modal');
+            
+            lightboxModal.classList.remove('active');
+            
+            setTimeout(() => {
+                lightboxModal.style.display = 'none';
+            }, 300); 
+        }
+
+        /**
+         * Updates the image source and description in the lightbox.
+         */
+        function updateLightboxContent() {
+            if (filteredImages.length === 0) return;
+
+            // Uses the filteredImages array
+            const img = filteredImages[currentLightboxIndex];
+            document.getElementById('lightbox-img').src = img.src;
+            document.getElementById('lightbox-img').alt = img.description;
+            document.getElementById('lightbox-description').textContent = img.description;
+        }
+
+        /**
+         * Navigates to the next or previous image in the lightbox.
+         * @param {number} direction - 1 for next, -1 for previous.
+         */
+        function navigate(direction) {
+            // Uses the filteredImages array
+            const total = filteredImages.length; 
+            if (total === 0) return;
+
+            currentLightboxIndex = (currentLightboxIndex + direction + total) % total;
+            updateLightboxContent();
+        }
+
+        // --- SEARCH LOGIC (Updated to collapse/expand and show suggestions) ---
+
+        /**
+         * Generates and shows search suggestions.
+         */
+        function showSuggestions() {
+            const suggestionsEl = document.getElementById('search-suggestions');
+            const inputEl = document.getElementById('search-input');
+            suggestionsEl.innerHTML = '';
+            
+            // Generate suggestions (using popular categories)
+            popularSuggestions.forEach(term => {
+                // Skip if the term is already being typed/is the active search
+                if (searchQuery.toLowerCase().includes(term.toLowerCase())) return; 
+                
+                const span = document.createElement('span');
+                span.textContent = term;
+                // Add an explicit mousedown listener to prevent blur from collapsing the suggestions too quickly
+                span.onmousedown = (e) => {
+                    e.preventDefault(); // Prevents input blur
+                    inputEl.value = term;
+                    handleSearchInput(inputEl);
+                    suggestionsEl.classList.add('hidden'); // Hide after selection
+                };
+                span.className = 'inline-block bg-gray-700 hover:bg-green-600 text-xs text-white rounded-full px-3 py-1 mr-2 mb-2 cursor-pointer transition-colors duration-200';
+                suggestionsEl.appendChild(span);
+            });
+
+            suggestionsEl.classList.remove('hidden');
+        }
+
+        /**
+         * Handles the focus event, expanding the search bar and showing suggestions.
+         */
+        function handleSearchFocus() {
+            clearTimeout(blurTimeout); // Clear any pending collapse
+            const input = document.getElementById('search-input');
+            
+            // EXPAND: Set full width and rectangular shape, apply background/border
+            input.classList.remove('w-10', 'bg-transparent', 'border-transparent');
+            input.classList.add('w-48', 'sm:w-64', 'bg-gray-800', 'border-gray-700', 'rounded-lg');
+            
+            showSuggestions();
+        }
+
+        /**
+         * Handles the blur event, collapsing the search bar if it's empty, and hiding suggestions.
+         */
+        function handleSearchBlur() {
+            // Use a slight delay to allow the user to click on a suggestion before hiding it
+            blurTimeout = setTimeout(() => {
+                const input = document.getElementById('search-input');
+                const suggestionsEl = document.getElementById('search-suggestions');
+                
+                suggestionsEl.classList.add('hidden');
+
+                // COLLAPSE: Only collapse if the input is empty
+                if (!input.value.trim()) {
+                    // Collapse to icon state (w-10, transparent background/border)
+                    input.classList.remove('w-48', 'sm:w-64', 'bg-gray-800', 'border-gray-700', 'rounded-lg');
+                    input.classList.add('w-10', 'bg-transparent', 'border-transparent');
+                }
+            }, 150); // 150ms delay
+        }
+
+        // --- NEW IMAGE ADDITION FUNCTIONS ---
+
+        /**
+         * Opens the modal for adding a new image.
+         */
+        function openAddModal() {
+            const addModal = document.getElementById('add-image-modal');
+            addModal.style.display = 'flex';
+            setTimeout(() => addModal.classList.add('active'), 10);
+        }
+
+        /**
+         * Closes the image addition modal.
+         */
+        function closeAddModal() {
+            const addModal = document.getElementById('add-image-modal');
+            addModal.classList.remove('active');
+            
+            // Also clear the form
+            document.getElementById('add-image-form').reset();
+            // Clear the image preview
+            document.getElementById('image-preview').innerHTML = '<span class="text-gray-500">No image selected</span>';
+
+            setTimeout(() => {
+                addModal.style.display = 'none';
+            }, 300); 
+        }
+
+        /**
+         * Handles image file selection and displays a preview.
+         */
+        function previewImage(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('image-preview');
+            
+            if (file) {
+                if (!file.type.startsWith('image/')) {
+                    preview.innerHTML = '<span class="text-red-400">Please select an image file.</span>';
+                    event.target.value = ''; // Clear the file input
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    // Display the image in the preview area
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Preview" class="w-full h-32 object-contain rounded-lg">`;
+                };
+                reader.readAsDataURL(file); // Read file as Base64 data URL
+            } else {
+                preview.innerHTML = '<span class="text-gray-500">No image selected</span>';
+            }
+        }
+
+        /**
+         * Adds a new image to the gallery based on form input.
+         */
+        function addImage(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const fileInput = form.image_file;
+            const category = form.category.value;
+            const description = form.description.value.trim() || 'Custom image added by user.';
+
+            if (fileInput.files.length === 0) {
+                 const feedback = document.getElementById('feedback-message');
+                 feedback.textContent = 'Please select an image file to upload.';
+                 feedback.classList.add('active', 'bg-red-600/90');
+                 setTimeout(() => feedback.classList.remove('active', 'bg-red-600/90'), 3000);
+                 return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            // When the file is loaded (converted to Base64)
+            reader.onload = (e) => {
+                const src = e.target.result; // Base64 data URL
+                const newImage = { src, category, description };
+
+                // 1. Add the new image to the main array (at the beginning so it shows up first)
+                images.unshift(newImage);
+
+                // 2. Re-filter (this will also call renderNavCategories)
+                filterImages(activeCategory);
+
+                // 3. Close the modal and show success feedback
+                closeAddModal();
+                
+                const feedback = document.getElementById('feedback-message');
+                feedback.textContent = `Image added successfully! (${newImage.category})`;
+                feedback.classList.remove('bg-red-600/90');
+                feedback.classList.add('active', 'bg-gray-800');
+                setTimeout(() => feedback.classList.remove('active', 'bg-gray-800'), 3000);
+            };
+
+            // Read the file as a Base64 data URL
+            reader.readAsDataURL(file);
+        }
+        
+        // Global event listener for keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            // Check if the lightbox is open
+            if (document.getElementById('lightbox-modal').style.display === 'flex') {
+                if (e.key === 'Escape') {
+                    closeLightbox();
+                } else if (e.key === 'ArrowRight') {
+                    navigate(1);
+                } else if (e.key === 'ArrowLeft') {
+                    navigate(-1);
+                }
+            } else if (document.getElementById('add-image-modal').style.display === 'flex') {
+                 if (e.key === 'Escape') {
+                    closeAddModal();
+                }
+            } else if (e.key === 'Escape') {
+                // Also close the mobile menu if open
+                const menu = document.getElementById('mobile-menu');
+                if (menu.classList.contains('translate-x-0')) {
+                    toggleMenu();
+                }
+            }
+        });
+
+        // Initialize the gallery on page load: Start by setting category and rendering everything
+        window.onload = () => {
+            // Manually set the initial collapsed state for search input: w-10, transparent, no border
+            const input = document.getElementById('search-input');
+            input.classList.add('w-10', 'bg-transparent', 'border-transparent'); 
+            filterImages('ALL'); 
+        };
+    </script>
+
+    <!-- TOP NAVIGATION BAR (Now solid dark gray) -->
+    <nav class="sticky top-0 z-20 bg-gray-900 border-b border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+            
+            <!-- Profile Image/Logo ONLY -->
+            <div class="flex items-center">
+                <img 
+                    src="images/Gallery icon.jpeg" 
+                    alt="Gallery Profile Photo" 
+                    class="w-10 h-10 rounded-full border-2 border-green-500 shadow-lg object-cover cursor-pointer"
+                    onerror="this.onerror=null; this.src='https://placehold.co/40x40/333/fff?text=PF'"
+                >
+            </div>
+            
+            <!-- Combined Navigation Area: Categories, Search, and Menu Icons -->
+            <div class="flex items-center space-x-3 lg:space-x-6">
+                
+                <!-- Desktop Menu: Category filter buttons (Hidden on mobile, visible on large screens) -->
+                <!-- Styled as sleek, professional pill buttons (rounded-full) -->
+                <div id="desktop-nav" class="hidden lg:flex items-center space-x-3">
+                    <!-- Category links will be injected here by JS (renderNavCategories) -->
+                </div>
+                
+                <!-- Search Input Container: Now controls its own width/shape based on focus -->
+                <div class="relative flex items-center">
+                    <!-- Search Icon (Always visible, pointer-events-none ensures clicking the icon focuses the input underneath) -->
+                    <svg class="absolute left-3 w-4 h-4 text-gray-400 pointer-events-none z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    
+                    <!-- Input Field (Starts collapsed and expands on focus/click) -->
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        oninput="handleSearchInput(this)" 
+                        onfocus="handleSearchFocus()"
+                        onblur="handleSearchBlur()"
+                        class="h-10 p-2 pl-10 focus:ring-green-500 focus:border-green-500 transition-all duration-300"
+                        title="Search Gallery"
+                    >
+                    
+                    <!-- Suggestions Dropdown (Hidden by default) -->
+                    <div id="search-suggestions" class="absolute top-12 left-0 w-full bg-gray-800 rounded-lg shadow-xl border border-gray-700 p-2 hidden z-40">
+                        <p class="text-xs text-gray-400 mb-1 font-semibold">Suggested Searches:</p>
+                        <!-- Suggestions will be populated here by JS -->
+                    </div>
+                </div>
+
+                <!-- Mobile Menu Toggle (Visible only on screens smaller than lg) -->
+                <button class="lg:hidden text-white p-2 focus:outline-none" onclick="toggleMenu()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Mobile Sidebar Menu (Solid dark gray) -->
+    <div id="mobile-menu" class="fixed top-0 right-0 w-64 h-full bg-gray-900 z-50 shadow-2xl transform translate-x-full lg:hidden p-4">
+        <!-- Close Button -->
+        <div class="flex justify-end mb-8">
+             <button class="text-white text-3xl font-light hover:text-green-500 transition-colors duration-200" onclick="toggleMenu()">
+                &times;
+            </button>
+        </div>
+        
+        <!-- Mobile Menu Links: Categories styled as sleek, full-width buttons -->
+        <div id="mobile-nav" class="flex flex-col space-y-4 text-lg font-medium">
+            <!-- Category links will be injected here by JS (renderNavCategories) -->
+        </div>
+        
+        <!-- Divider and Profile -->
+        <div class="absolute bottom-0 left-0 w-full border-t border-gray-800 p-4">
+             <div class="flex items-center space-x-3">
+                 <img 
+                    src="Gallery icon.jpeg" 
+                    alt="Gallery Profile Photo" 
+                    class="w-8 h-8 rounded-full border border-green-500 object-cover"
+                    onerror="this.onerror=null; this.src='https://placehold.co/32x32/333/fff?text=PF'"
+                >
+                <span class="text-sm text-gray-400">Filter options above</span>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- HERO / BIO SECTION (Solid dark gray) -->
+    <!-- Width set to max-w-7xl for a wide layout -->
+    <!-- Opacity added to background for better contrast against the new background image -->
+    <header class="text-center py-20 px-4 max-w-7xl mx-auto bg-gray-900/90 rounded-xl shadow-2xl mt-8 border border-gray-800">
+        <!-- Original Welcome Styling: Large, serif, green highlight -->
+        <h2 class="text-3xl md:text-5xl font-serif font-light mb-4 tracking-tight">
+            <span class="text-green-500 font-medium">Welcome</span> to my gallery
+        </h2>
+        <!-- The description and button have been removed as requested -->
+    </header>
+
+    <!-- Main Content Area: Image Grid (Solid dark gray) -->
+    <!-- Opacity added to background for better contrast against the new background image -->
+    <main class="max-w-7xl mx-auto px-1 sm:px-3 lg:px-4 py-8 mt-8 bg-gray-900/90 rounded-xl shadow-2xl border border-gray-800">
+        
+        <!-- UPDATED H3: My is green, Gallery is white -->
+        <h3 class="text-3xl font-medium mb-6 px-4">
+            <span class="text-green-500">My</span> Gallery
+        </h3>
+        
+        <!-- Image Grid - Tighter grid for the portfolio look -->
+        <div id="image-gallery" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 px-4 pb-4">
+            <!-- Images will be injected here by JS -->
+        </div>
+    </main>
+
+    <!-- Footer - Reverted to include all social media icons and phone number -->
+    <footer class="bg-gray-900/90 py-10 mt-12 border-t border-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            
+            <!-- Contact Information (Placeholder Kept) -->
+            <div class="mb-6 text-gray-300">
+                <h4 class="text-xl font-semibold mb-3 text-green-500">Get in Touch</h4>
+              
+            </div>
+
+            <!-- Social Media Icons (All four included) -->
+            <div class="flex justify-center space-x-6 mb-8">
+              
+                
+                
+                
+                <!-- WhatsApp Icon -->
+                <a href="https://wa.me/1234567890" target="_blank" class="text-gray-400 hover:text-whatsapp-green transition-colors duration-300" aria-label="WhatsApp">
+                    <svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12.039 2C6.545 2 2.14 6.365 2.14 11.821c0 1.76.467 3.473 1.343 4.97l-.92 3.364 3.415-.892c1.458.793 3.09 1.218 4.093 1.218h.001c5.495 0 9.898-4.365 9.898-9.821S17.533 2 12.039 2zm0 17.915c-1.2 0-2.428-.328-3.47-.945l-.25-.145-2.618.683.7-2.585-.166-.263c-.67-1.07-.98-2.29-.98-3.565 0-4.577 3.79-8.318 8.444-8.318 4.654 0 8.443 3.741 8.443 8.318 0 4.577-3.79 8.318-8.444 8.318h-.001zm3.8-5.596c-.208-.104-.613-.245-.867-.367-.254-.122-.44-.183-.626.183-.186.366-.71.916-.867 1.099-.157.183-.314.195-.57.06-.254-.122-1.07-.39-2.035-1.229-.75-.658-1.253-1.468-1.396-1.701-.143-.233-.016-.36.104-.474.118-.114.26-.24.383-.367.123-.122.164-.203.245-.366.082-.163.041-.314-.021-.435-.062-.122-.57-.49-.785-.972-.216-.482-.186-.418-.314-.64-.128-.222-.245-.183-.367-.183-.122 0-.26-.008-.39-.008-.127 0-.332.06-.505.286-.174.226-.66.64-1.004 1.564-.344.924-.13 1.836.425 2.66.556.824 1.733 2.64 4.192 3.593 2.458.953 2.458.636 2.91 1.05.452.414.292.812.195.916-.098.103-.315.186-.53.282-.216.096-.64.186-.946.186z"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Copyright -->
+            <p class="text-xs text-gray-500">&copy; Copyright PhotoFolio. All Rights Reserved</p>
+
+        </div>
+    </footer>
+    
+    <!-- Lightbox Modal (Hidden by default) -->
+    <div id="lightbox-modal" class="fade-in fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center p-4">
+        
+        <!-- Close Button -->
+        <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white text-4xl font-light hover:text-green-400 transition-colors duration-200">
+            &times;
+        </button>
+
+        <!-- Previous Button -->
+        <button onclick="navigate(-1)" class="absolute left-4 p-3 bg-white/10 text-white rounded-full hover:bg-green-500/50 transition-colors duration-200 focus:outline-none">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
+
+        <!-- Next Button -->
+        <button onclick="navigate(1)" class="absolute right-4 p-3 bg-white/10 text-white rounded-full hover:bg-green-500/50 transition-colors duration-200 focus:outline-none">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+
+        <!-- Modal Content (Image and Description) -->
+        <div class="relative w-full max-w-5xl max-h-[90vh] flex flex-col items-center">
+            
+            <!-- Image Container -->
+            <div class="w-full bg-gray-900 rounded-lg overflow-hidden shadow-2xl">
+                <img id="lightbox-img" src="" alt="Gallery Image" class="w-full h-auto object-contain max-h-[80vh] transition-all duration-300" onerror="this.onerror=null; this.src='https://placehold.co/1000x750/333/fff?text=Error+Loading+Image'">
+            </div>
+            
+            <!-- Description -->
+            <p id="lightbox-description" class="mt-4 text-center text-white text-lg bg-white/10 p-2 rounded-lg shadow-xl">
+                Image Description
+            </p>
+        </div>
+
+    </div>
+
+    <!-- Add Image Modal (Hidden by default) -->
+    <div id="add-image-modal" class="fade-in fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center p-4">
+        
+        <!-- Close Button -->
+        <button onclick="closeAddModal()" class="absolute top-4 right-4 text-white text-4xl font-light hover:text-green-400 transition-colors duration-200 z-50">
+            &times;
+        </button>
+
+        <!-- Modal Content (Form) -->
+        <div class="w-full max-w-lg bg-gray-900 rounded-xl p-8 shadow-2xl border border-gray-800">
+            <h3 class="text-2xl font-bold mb-6 text-white">Add New Portfolio Image</h3>
+            
+            <form id="add-image-form" onsubmit="addImage(event)">
+                
+                <!-- Image File Upload -->
+                <div class="mb-4">
+                    <label for="image_file" class="block text-sm font-medium text-gray-300 mb-1">Select Image from Device</label>
+                    <input 
+                        type="file" 
+                        id="image_file" 
+                        name="image_file" 
+                        accept="image/*" 
+                        onchange="previewImage(event)"
+                        required 
+                        class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-green-500 focus:border-green-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-500 file:text-white hover:file:bg-green-600 transition duration-300"
+                    >
+                </div>
+                
+                <!-- Image Preview Area -->
+                <div id="image-preview" class="mb-4 flex items-center justify-center h-36 bg-gray-800 border-2 border-dashed border-gray-700 rounded-lg p-2">
+                    <span class="text-gray-500">No image selected</span>
+                </div>
+
+
+                <!-- Category -->
+                <div class="mb-4">
+                    <label for="category" class="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                    <select id="category" name="category" required class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-green-500 focus:border-green-500 appearance-none">
+                        <option value="Portrait">Portrait</option>
+                        <option value="Nature">Nature</option>
+                        <option value="City">City</option>
+                        <!-- Allows for custom category addition -->
+                        <option value="Other">Other</option> 
+                    </select>
+                </div>
+                
+                <!-- Description -->
+                <div class="mb-6">
+                    <label for="description" class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                    <textarea id="description" name="description" rows="2" class="w-full p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:ring-green-500 focus:border-green-500" placeholder="A brief description of the photo..."></textarea>
+                </div>
+                
+                <!-- Submit Button (Text color corrected to white for contrast) -->
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg shadow-xl transition duration-300">
+                    Add Image to Gallery
+                </button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Floating Action Button (FAB) - Added Fixed Position -->
+    <button 
+        onclick="openAddModal()" 
+        class="fixed bottom-6 right-6 z-40 p-4 rounded-full bg-green-600 text-white shadow-2xl hover:bg-green-700 transition duration-300 transform hover:scale-105"
+        title="Add New Image"
+    >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+    </button>
+    
+    <!-- Feedback Message (Temporary, non-alert) -->
+    <div id="feedback-message" class="fixed bottom-6 left-6 z-50 p-3 bg-gray-800 text-green-400 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none">
+        <!-- Message content set by JS -->
+    </div>
+
+</body>
+</html>
